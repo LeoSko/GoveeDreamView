@@ -1,0 +1,6 @@
+bin/
+obj/
+config.ini
+govee.log
+calibration-report.txt
+.aislop/
