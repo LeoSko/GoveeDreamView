@@ -63,10 +63,12 @@ namespace GoveeDreamView
         }
 
         // Wakes the device into stream mode: power on, brightness, then enable razer/DreamView.
+        // Power is UDP fire-and-forget with no ack; on resume from sleep the NIC is still settling and
+        // a single turn:1 gets dropped, leaving the strip dark while colours stream into it. Send it a
+        // few times so one lands.
         public void Activate(int brightness)
         {
-            Power(true);
-            System.Threading.Thread.Sleep(100);
+            for (int i = 0; i < 3; i++) { Power(true); System.Threading.Thread.Sleep(80); }
             SetBrightness(brightness);
             System.Threading.Thread.Sleep(100);
             SendJson("{\"msg\":{\"cmd\":\"razer\",\"data\":{\"pt\":\"uwABsQEK\"}}}"); // BB 00 01 B1 01 0A
