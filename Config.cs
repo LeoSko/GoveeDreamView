@@ -18,7 +18,8 @@ namespace GoveeDreamView
         public double Saturation = 1.25;    // >1 boosts colour vividness
         public double Gamma = 2.2;          // >1 darkens dark/mid tones so dark areas stay dark
         public int MonitorIndex = 0;        // which display to capture (0 = primary)
-        public bool PauseOnLock = false;    // stop streaming (device off) while the workstation is locked
+        public bool StreamEvenIfGoveeDesktop = false;  // false = don't auto-stream while Govee's own desktop app runs (they fight over the strip); true = stream anyway
+        public bool KillGoveeDesktop = false;          // true = kill GoveeDesktop.exe on every start instead of stepping aside
 
         // --- colour correction (filled in by tray -> Calibrate colours) ---
         public double[] Ccm = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };   // 3x3 row-major, applied after gamma
@@ -55,7 +56,8 @@ namespace GoveeDreamView
             c.Saturation = ClampD(GetDouble(map, "Saturation", c.Saturation), 0.0, 3.0);
             c.Gamma = ClampD(GetDouble(map, "Gamma", c.Gamma), 0.1, 5.0);
             c.MonitorIndex = Math.Max(0, GetInt(map, "MonitorIndex", c.MonitorIndex));
-            c.PauseOnLock = GetBool(map, "PauseOnLock", c.PauseOnLock);
+            c.StreamEvenIfGoveeDesktop = GetBool(map, "StreamEvenIfGoveeDesktop", c.StreamEvenIfGoveeDesktop);
+            c.KillGoveeDesktop = GetBool(map, "KillGoveeDesktop", c.KillGoveeDesktop);
             c.Ccm = GetDoubles(map, "Ccm", c.Ccm, 9);
             c.CalibPort = Clamp(GetInt(map, "CalibPort", c.CalibPort), 1024, 65535);
             return c;
@@ -79,8 +81,11 @@ namespace GoveeDreamView
                 "# Gamma: >1 darkens dark/mid tones (perceptual). 2.2 typical; raise (e.g. 2.8) for darker blacks.\n" +
                 "Gamma=" + Gamma.ToString(CultureInfo.InvariantCulture) + "\n" +
                 "MonitorIndex=" + MonitorIndex + "\n" +
-                "# PauseOnLock: true turns the strip off while Windows is locked, back on when you unlock.\n" +
-                "PauseOnLock=" + (PauseOnLock ? "true" : "false") + "\n" +
+                "# StreamEvenIfGoveeDesktop: false = don't auto-stream while Govee's own desktop app is\n" +
+                "# running (both drive the strip and it blinks). true = stream anyway. Manual start always works.\n" +
+                "StreamEvenIfGoveeDesktop=" + (StreamEvenIfGoveeDesktop ? "true" : "false") + "\n" +
+                "# KillGoveeDesktop: true kills GoveeDesktop.exe on every start instead of stepping aside.\n" +
+                "KillGoveeDesktop=" + (KillGoveeDesktop ? "true" : "false") + "\n" +
                 "# Ccm: 3x3 colour-correction matrix (row-major), set by tray -> Calibrate colours.\n" +
                 "Ccm=" + Join(Ccm) + "\n" +
                 "# CalibPort: HTTPS port for the phone calibration page.\n" +

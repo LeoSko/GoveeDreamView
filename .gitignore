@@ -3,4 +3,5 @@ obj/
 config.ini
 govee.log
 calibration-report.txt
+camera-cert.pfx
 .aislop/

@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
@@ -18,9 +19,7 @@ namespace GoveeDreamView
     // TLS) and POSTs JPEG frames back. The calibrator reads the latest frame on demand.
     internal sealed class CameraServer : IDisposable
     {
-        // Self-signed cert (CN=GoveeDreamView), password "govee". Browser shows a one-time warning.
-        private const string PfxB64 =
-            "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";
+        private const string CertPwd = "govee";
 
         private const int CapMax = 480;   // frames decoded with long edge = CapMax, aspect preserved
         private const int MaxBody = 4 * 1024 * 1024;
@@ -36,7 +35,36 @@ namespace GoveeDreamView
 
         public CameraServer()
         {
-            _cert = new X509Certificate2(Convert.FromBase64String(PfxB64), "govee", X509KeyStorageFlags.Exportable);
+            _cert = LoadOrCreateCert();
+        }
+
+        // Self-signed cert (CN=GoveeDreamView), generated on first use and cached next to the exe.
+        // Generating beats embedding a PFX: it keeps ~7 KB of base64 out of the binary, and caching
+        // keeps the fingerprint stable so the phone's one-time browser warning stays one-time.
+        private static X509Certificate2 LoadOrCreateCert()
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, "camera-cert.pfx");
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var cached = new X509Certificate2(File.ReadAllBytes(path), CertPwd, X509KeyStorageFlags.Exportable);
+                    if (cached.NotAfter > DateTime.Now) return cached;
+                }
+                catch (Exception ex) { Log.Write("cert load: " + ex.Message); }
+            }
+
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest("CN=GoveeDreamView", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                using (var made = req.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddYears(10)))
+                {
+                    byte[] pfx = made.Export(X509ContentType.Pfx, CertPwd);
+                    try { File.WriteAllBytes(path, pfx); }
+                    catch (Exception ex) { Log.Write("cert save: " + ex.Message); }
+                    return new X509Certificate2(pfx, CertPwd, X509KeyStorageFlags.Exportable);
+                }
+            }
         }
 
         public int Start(int port)

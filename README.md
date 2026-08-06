@@ -62,15 +62,19 @@ your device, settings). Without it nothing on your network can reach it.
 ## Tray menu
 
 - **Start / Stop**, or double-click the icon.
-- **Pause when locked** turns the strip off when you lock Windows and back on when you return.
 - **Settings** tunes brightness, gamma and saturation live. Once brightness is maxed,
   gamma is the knob that actually changes how bright it looks: higher means deeper blacks
-  but dimmer mid-tones.
+  but dimmer mid-tones. It also holds **Start with Windows** and the two Govee Desktop
+  switches below.
+- **Kill Govee Desktop** clears the way when Govee's own app has the strip. Both stream
+  the same protocol, so together they make it blink; by default this app steps aside and
+  skips auto-start while GoveeDesktop.exe runs.
 - **Calibrate colours** points your phone camera at the wall behind the strip and solves
   a colour matrix so the reflected light matches the screen. Never leaves your LAN.
 - Plus Reload/Edit config and Rediscover device.
 
-Everything gets saved to a `config.ini` next to the exe, each key commented.
+Lock Windows and the strip goes off; unlock and it comes back. Everything gets saved to a
+`config.ini` next to the exe, each key commented.
 
 ## Files
 

@@ -114,7 +114,6 @@ namespace GoveeDreamView
         private readonly NotifyIcon _tray;
         private readonly ToolStripMenuItem _toggleItem;
         private readonly ToolStripMenuItem _statusItem;
-        private readonly ToolStripMenuItem _pauseOnLockItem;
         private readonly Icon _iconOff;   // muted grey: stopped
         private readonly System.Windows.Forms.Timer _animTimer;
         private Icon _animIcon;           // current live-colour frame while streaming
@@ -135,20 +134,15 @@ namespace GoveeDreamView
 
             _statusItem = new ToolStripMenuItem("Stopped") { Enabled = false };
             _toggleItem = new ToolStripMenuItem("Start", null, (s, e) => Toggle());
-            _pauseOnLockItem = new ToolStripMenuItem("Pause when locked", null, (s, e) => TogglePauseOnLock())
-            {
-                Checked = _cfg.PauseOnLock,
-                CheckOnClick = true,
-            };
             var menu = new ContextMenuStrip();
             menu.Items.Add(_statusItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(_toggleItem);
-            menu.Items.Add(_pauseOnLockItem);
             menu.Items.Add(BuildSettingsMenu());
             menu.Items.Add("Reload config", null, (s, e) => ReloadConfig());
             menu.Items.Add("Edit config", null, (s, e) => OpenConfig());
             menu.Items.Add("Rediscover device", null, (s, e) => Rediscover());
+            menu.Items.Add("Kill Govee Desktop", null, (s, e) => { KillGoveeDesktop(); if (!_running) Start(); });
             menu.Items.Add("Calibrate colours", null, (s, e) => Calibrate());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, (s, e) => ExitApp());
@@ -169,7 +163,7 @@ namespace GoveeDreamView
 
             SystemEvents.SessionSwitch += OnSessionSwitch;
 
-            Start(); // auto-start on launch
+            Start(auto: true); // auto-start on launch (skipped if Govee Desktop is running)
         }
 
         private void Toggle()
@@ -178,18 +172,11 @@ namespace GoveeDreamView
             else Start();
         }
 
-        // Tray tickbox: persist the choice. CheckOnClick has already flipped Checked.
-        private void TogglePauseOnLock()
-        {
-            _cfg.PauseOnLock = _pauseOnLockItem.Checked;
-            try { _cfg.Save(); } catch (Exception ex) { Log.Write("Save PauseOnLock: " + ex.Message); }
-            if (!_cfg.PauseOnLock) _pausedByLock = false;
-        }
-
-        // Lock -> stop streaming and power the strip off. Unlock -> power on + resume, if we stopped it.
+        // Lock -> always stop capturing and power the strip off. Streaming while locked is pointless
+        // (the secure desktop can't be captured) and continuously reading the display DC keeps the
+        // monitor from ever sleeping. Unlock -> power on + resume, if the lock is what stopped us.
         private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
         {
-            if (!_cfg.PauseOnLock) return;
             if (e.Reason == SessionSwitchReason.SessionLock)
             {
                 Log.Write("SessionLock" + (_running ? " -> stop + power off" : " (not running)"));
@@ -203,7 +190,7 @@ namespace GoveeDreamView
             else if (e.Reason == SessionSwitchReason.SessionUnlock)
             {
                 Log.Write("SessionUnlock" + (_pausedByLock ? " -> power on + resume" : " (nothing to resume)"));
-                if (_pausedByLock) { _pausedByLock = false; Start(); }   // Activate() powers the device back on
+                if (_pausedByLock) { _pausedByLock = false; Start(auto: true); }   // Activate() powers the device back on
             }
         }
 
@@ -229,6 +216,39 @@ namespace GoveeDreamView
             settings.DropDownItems.Add(PresetMenu("Saturation",
                 new[] { 1.0, 1.25, 1.5, 1.75 }, v => v.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), _cfg.Saturation,
                 v => { _cfg.Saturation = v; SaveCfg(); _tuningDirty = true; }));
+
+            var streamAnyway = new ToolStripMenuItem("Stream even if Govee Desktop runs")
+            {
+                Checked = _cfg.StreamEvenIfGoveeDesktop,
+                CheckOnClick = true,
+            };
+            streamAnyway.CheckedChanged += (s, e) =>
+            {
+                _cfg.StreamEvenIfGoveeDesktop = streamAnyway.Checked;
+                SaveCfg();
+                if (_cfg.StreamEvenIfGoveeDesktop && !_running) Start(); // opted in -> start now
+            };
+            settings.DropDownItems.Add(streamAnyway);
+
+            var killDesktop = new ToolStripMenuItem("Kill Govee Desktop on start")
+            {
+                Checked = _cfg.KillGoveeDesktop,
+                CheckOnClick = true,
+            };
+            killDesktop.CheckedChanged += (s, e) =>
+            {
+                _cfg.KillGoveeDesktop = killDesktop.Checked;
+                SaveCfg();
+            };
+            settings.DropDownItems.Add(killDesktop);
+
+            var autoStart = new ToolStripMenuItem("Start with Windows")
+            {
+                Checked = AutoStartEnabled(),
+                CheckOnClick = true,
+            };
+            autoStart.CheckedChanged += (s, e) => SetAutoStart(autoStart.Checked);
+            settings.DropDownItems.Add(autoStart);
             return settings;
         }
 
@@ -330,9 +350,66 @@ namespace GoveeDreamView
             return p;
         }
 
-        private void Start()
+        // True while Govee's own desktop app is running. Both stream to the strip over the same LAN
+        // protocol, so running together makes it blink; we skip auto-start unless the user opts in.
+        // "Start with Windows" = a value under HKCU Run pointing at this exe. Per-user, no admin needed.
+        private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string RunValue = "GoveeDreamView";
+
+        private static string ExePath() =>
+            System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+
+        private static bool AutoStartEnabled()
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
+                    return k?.GetValue(RunValue) != null;
+            }
+            catch (Exception ex) { Log.Write("AutoStart read: " + ex.Message); return false; }
+        }
+
+        private static void SetAutoStart(bool on)
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true))
+                {
+                    if (on) k.SetValue(RunValue, "\"" + ExePath() + "\"");
+                    else k.DeleteValue(RunValue, false);
+                }
+                Log.Write("Start with Windows -> " + (on ? "on" : "off"));
+            }
+            catch (Exception ex) { Log.Write("AutoStart write: " + ex.Message); }
+        }
+
+        private static bool GoveeDesktopRunning() =>
+            System.Diagnostics.Process.GetProcessesByName("GoveeDesktop").Length > 0;
+
+        private static void KillGoveeDesktop()
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("GoveeDesktop"))
+            {
+                try { p.Kill(); Log.Write("Killed GoveeDesktop pid " + p.Id); }
+                catch (Exception ex) { Log.Write("Kill GoveeDesktop: " + ex.Message); }
+                finally { p.Dispose(); }
+            }
+        }
+
+        // auto = launched/resumed automatically. Manual start (tray toggle) passes false and always runs.
+        private void Start(bool auto = false)
         {
             if (_running) return;
+
+            if (_cfg.KillGoveeDesktop) KillGoveeDesktop();
+
+            if (auto && !_cfg.StreamEvenIfGoveeDesktop && GoveeDesktopRunning())
+            {
+                Log.Write("GoveeDesktop is running -> not auto-streaming (tray Settings -> 'Stream anyway', or start manually)");
+                SetStatus("Idle - Govee Desktop running");
+                return;
+            }
+
             try
             {
                 string ip = ResolveDeviceIp();
