@@ -73,7 +73,8 @@ your device, settings). Without it nothing on your network can reach it.
   a colour matrix so the reflected light matches the screen. Never leaves your LAN.
 - Plus Reload/Edit config and Rediscover device.
 
-Lock Windows and the strip goes off; unlock and it comes back. Everything gets saved to a
+Lock Windows and the strip goes off; unlock and it comes back. After sleep it rediscovers
+the strip by itself. Everything gets saved to a
 `config.ini` next to the exe, each key commented.
 
 ## Files

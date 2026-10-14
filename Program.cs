@@ -162,6 +162,7 @@ namespace GoveeDreamView
             _animTimer.Tick += (s, e) => AnimTick();
 
             SystemEvents.SessionSwitch += OnSessionSwitch;
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
             Start(auto: true); // auto-start on launch (skipped if Govee Desktop is running)
         }
@@ -192,6 +193,18 @@ namespace GoveeDreamView
                 Log.Write("SessionUnlock" + (_pausedByLock ? " -> power on + resume" : " (nothing to resume)"));
                 if (_pausedByLock) { _pausedByLock = false; Start(auto: true); }   // Activate() powers the device back on
             }
+        }
+
+        // Wake from sleep -> rediscover + restart, like the tray item. After wake the strip can sit on
+        // its own scene and ignore our frames until re-armed. The delay lets Wi-Fi reconnect first.
+        private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode != PowerModes.Resume) return;
+            Log.Write("Resume" + (_running ? " -> rediscover in 5 s" : " (not running)"));
+            if (!_running) return;
+            var delay = new System.Windows.Forms.Timer { Interval = 5000 };
+            delay.Tick += (s, a) => { delay.Dispose(); if (_running) Rediscover(); };
+            delay.Start();
         }
 
         // Powers the strip off via a one-off client (Stop() has already disposed the streaming client).
@@ -673,6 +686,7 @@ namespace GoveeDreamView
         private void ExitApp()
         {
             SystemEvents.SessionSwitch -= OnSessionSwitch;
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             Stop();
             _animTimer.Dispose();
             _tray.Visible = false;
