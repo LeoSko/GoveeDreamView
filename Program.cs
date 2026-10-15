@@ -197,9 +197,17 @@ namespace GoveeDreamView
 
         // Wake from sleep -> rediscover + restart, like the tray item. After wake the strip can sit on
         // its own scene and ignore our frames until re-armed. The delay lets Wi-Fi reconnect first.
+        // A PC usually locks before it sleeps: then the lock stopped us, and unlock re-locates the strip.
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
             if (e.Mode != PowerModes.Resume) return;
+            if (!_running && _pausedByLock)
+            {
+                Log.Write("Resume while locked -> rediscover on unlock");
+                _cfg.DeviceIp = "";
+                _cfg.Save();
+                return;
+            }
             Log.Write("Resume" + (_running ? " -> rediscover in 5 s" : " (not running)"));
             if (!_running) return;
             var delay = new System.Windows.Forms.Timer { Interval = 5000 };
