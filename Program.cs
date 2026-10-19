@@ -125,6 +125,7 @@ namespace GoveeDreamView
         private Thread _worker;
         private volatile bool _running;
         private bool _pausedByLock;    // true when a session lock stopped streaming, so unlock can resume
+        private System.Windows.Forms.Timer _retryTimer;   // StartWithRetry() attempts after wake/unlock
         private string _lastIp;        // last resolved device IP, so we can power it off after Stop() disposes the client
         private volatile bool _tuningDirty;   // set by the Settings menu so the loop rebuilds gamma/saturation live
 
@@ -169,6 +170,7 @@ namespace GoveeDreamView
 
         private void Toggle()
         {
+            CancelRetry();
             if (_running) Stop();
             else Start();
         }
@@ -181,6 +183,7 @@ namespace GoveeDreamView
             if (e.Reason == SessionSwitchReason.SessionLock)
             {
                 Log.Write("SessionLock" + (_running ? " -> stop + power off" : " (not running)"));
+                CancelRetry();
                 if (_running)
                 {
                     _pausedByLock = true;
@@ -191,12 +194,17 @@ namespace GoveeDreamView
             else if (e.Reason == SessionSwitchReason.SessionUnlock)
             {
                 Log.Write("SessionUnlock" + (_pausedByLock ? " -> power on + resume" : " (nothing to resume)"));
-                if (_pausedByLock) { _pausedByLock = false; Start(auto: true); }   // Activate() powers the device back on
+                if (_pausedByLock)
+                {
+                    _pausedByLock = false;
+                    Start(auto: true, quiet: true);   // Activate() powers the device back on
+                    if (!_running) StartWithRetry();
+                }
             }
         }
 
         // Wake from sleep -> rediscover + restart, like the tray item. After wake the strip can sit on
-        // its own scene and ignore our frames until re-armed. The delay lets Wi-Fi reconnect first.
+        // its own scene and ignore our frames until re-armed. Retries wait for Wi-Fi to reconnect.
         // A PC usually locks before it sleeps: then the lock stopped us, and unlock re-locates the strip.
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
@@ -208,11 +216,35 @@ namespace GoveeDreamView
                 _cfg.Save();
                 return;
             }
-            Log.Write("Resume" + (_running ? " -> rediscover in 5 s" : " (not running)"));
+            Log.Write("Resume" + (_running ? " -> rediscover, retry every 5 s" : " (not running)"));
             if (!_running) return;
-            var delay = new System.Windows.Forms.Timer { Interval = 5000 };
-            delay.Tick += (s, a) => { delay.Dispose(); if (_running) Rediscover(); };
-            delay.Start();
+            Stop();
+            _cfg.DeviceIp = "";
+            _cfg.Save();
+            StartWithRetry();
+        }
+
+        // After wake, Wi-Fi can take a while: the LAN scan then fails with "host unreachable".
+        // Retry quietly every 5 s for up to 2 min. Only the last failure shows a balloon.
+        private void StartWithRetry()
+        {
+            CancelRetry();
+            int attempt = 0;
+            var timer = new System.Windows.Forms.Timer { Interval = 5000 };
+            timer.Tick += (s, a) =>
+            {
+                bool last = ++attempt == 24;
+                Start(auto: true, quiet: !last);
+                if (_running || last) CancelRetry();
+            };
+            _retryTimer = timer;
+            timer.Start();
+        }
+
+        private void CancelRetry()
+        {
+            _retryTimer?.Dispose();
+            _retryTimer = null;
         }
 
         // Powers the strip off via a one-off client (Stop() has already disposed the streaming client).
@@ -418,7 +450,8 @@ namespace GoveeDreamView
         }
 
         // auto = launched/resumed automatically. Manual start (tray toggle) passes false and always runs.
-        private void Start(bool auto = false)
+        // quiet = log failures only, no balloon (a retry follows).
+        private void Start(bool auto = false, bool quiet = false)
         {
             if (_running) return;
 
@@ -436,7 +469,7 @@ namespace GoveeDreamView
                 string ip = ResolveDeviceIp();
                 if (string.IsNullOrWhiteSpace(ip))
                 {
-                    Notify("No Govee device found. Set DeviceIp/DeviceMac in config.ini and check LAN Control is on.", ToolTipIcon.Error);
+                    Notify("No Govee device found. Set DeviceIp/DeviceMac in config.ini and check LAN Control is on.", quiet ? ToolTipIcon.Info : ToolTipIcon.Error);
                     return;
                 }
 
@@ -454,8 +487,8 @@ namespace GoveeDreamView
             }
             catch (Exception ex)
             {
-                Log.Write("Start failed: " + ex);
-                Notify("Start failed: " + ex.Message, ToolTipIcon.Error);
+                if (!quiet) Log.Write("Start failed: " + ex);   // quiet: Notify below logs the message, no stack trace per retry
+                Notify("Start failed: " + ex.Message, quiet ? ToolTipIcon.Info : ToolTipIcon.Error);
                 Stop();
             }
         }
@@ -695,6 +728,7 @@ namespace GoveeDreamView
         {
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            CancelRetry();
             Stop();
             _animTimer.Dispose();
             _tray.Visible = false;
