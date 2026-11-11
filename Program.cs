@@ -597,6 +597,19 @@ namespace GoveeDreamView
             int fails = 0;
             try
             {
+                // Power-on is UDP with no ack. After unlock it can get lost for good, and the strip
+                // then stays dark while frames stream into it. Ask the strip and re-send until it is on.
+                try
+                {
+                    for (int i = 0; i < 20 && _running; i++)
+                    {
+                        Thread.Sleep(1500);   // the strip reports "on" a moment after turn:1
+                        if (_client.IsOn() == true) break;
+                        Log.Write("Strip not on -> power on again");
+                        _client.Activate(_cfg.Brightness);
+                    }
+                }
+                catch (Exception ex) { Log.Write("Power check: " + ex.Message); }
                 while (_running)
                 {
                     sw.Restart();

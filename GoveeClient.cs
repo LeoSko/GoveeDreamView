@@ -83,6 +83,24 @@ namespace GoveeDreamView
         public void Power(bool on) =>
             SendJson("{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":" + (on ? 1 : 0) + "}}}");
 
+        // Asks the device whether it is powered on. The reply goes to :4002, not to the sender port.
+        // Returns null when no reply arrives in time.
+        public bool? IsOn(int timeoutMs = 1000)
+        {
+            using var sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            sock.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            sock.Bind(new IPEndPoint(IPAddress.Any, ScanReplyPort));
+            sock.ReceiveTimeout = timeoutMs;
+            sock.SendTo(Encoding.UTF8.GetBytes("{\"msg\":{\"cmd\":\"devStatus\",\"data\":{}}}"), _device);
+            var buf = new byte[2048];
+            try
+            {
+                var m = Regex.Match(Encoding.UTF8.GetString(buf, 0, sock.Receive(buf)), "\"onOff\"\\s*:\\s*(\\d)");
+                return m.Success ? m.Groups[1].Value == "1" : (bool?)null;
+            }
+            catch (SocketException) { return null; }
+        }
+
         public void Deactivate()
         {
             try { SendJson("{\"msg\":{\"cmd\":\"razer\",\"data\":{\"pt\":\"uwABsQAL\"}}}"); } // BB 00 01 B1 00 0B
