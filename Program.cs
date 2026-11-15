@@ -608,6 +608,9 @@ namespace GoveeDreamView
                         Log.Write("Strip not on -> power on again");
                         _client.Activate(_cfg.Brightness);
                     }
+                    // A stream-on sent while the strip still boots is dropped: the strip reports
+                    // onOff:1 but stays dark. Arm stream mode again, now that the strip is up.
+                    if (_running) _client.Activate(_cfg.Brightness);
                 }
                 catch (Exception ex) { Log.Write("Power check: " + ex.Message); }
                 while (_running)
