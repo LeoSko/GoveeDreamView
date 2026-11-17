@@ -73,16 +73,18 @@ your device, settings). Without it nothing on your network can reach it.
   a colour matrix so the reflected light matches the screen. Never leaves your LAN.
 - Plus Reload/Edit config and Rediscover device.
 
-Lock Windows and the strip goes off; unlock and it comes back. After sleep it rediscovers
-the strip by itself. Everything gets saved to a
+Lock Windows, let the display turn off, or put the PC to sleep, and the strip goes off.
+Unlock, wake the display or the PC, and it comes back (after sleep it rediscovers the strip
+by itself). Everything gets saved to a
 `config.ini` next to the exe, each key commented.
 
 ## Files
 
 | File | What's in it |
 |------|--------------|
-| `Program.cs` | Tray app: menu, streaming loop, animated icon, lock handling |
+| `Program.cs` | Tray app: menu, streaming loop, animated icon, lock/sleep/display handling |
 | `GoveeClient.cs` | The Govee LAN protocol: discover, power, stream, razer packets |
+| `DisplayState.cs` | Display on/off notifications from Windows |
 | `Net.cs` | MAC-to-IP via an ARP sweep, so DHCP doesn't lose the strip |
 | `ScreenCapture.cs` | GDI StretchBlt capture and per-zone averaging |
 | `Config.cs` | The flat `key=value` config |

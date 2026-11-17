@@ -126,6 +126,9 @@ namespace GoveeDreamView
         private volatile bool _running;
         private bool _pausedByLock;    // true when a session lock stopped streaming, so unlock can resume
         private bool _pausedBySleep;   // true when sleep stopped streaming, so wake can resume
+        private bool _pausedByDisplay; // true when display-off stopped streaming, so display-on can resume
+        private bool _locked;          // session is locked: display-on must not resume onto the lock screen
+        private DisplayState _display;
         private System.Windows.Forms.Timer _retryTimer;   // StartWithRetry() attempts after wake/unlock
         private string _lastIp;        // last resolved device IP, so we can power it off after Stop() disposes the client
         private volatile bool _tuningDirty;   // set by the Settings menu so the loop rebuilds gamma/saturation live
@@ -165,6 +168,8 @@ namespace GoveeDreamView
 
             SystemEvents.SessionSwitch += OnSessionSwitch;
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            _display = new DisplayState();
+            _display.Changed += OnDisplayChanged;
 
             Start(auto: true); // auto-start on launch (skipped if Govee Desktop is running)
         }
@@ -183,6 +188,7 @@ namespace GoveeDreamView
         {
             if (e.Reason == SessionSwitchReason.SessionLock)
             {
+                _locked = true;
                 Log.Write("SessionLock" + (_running ? " -> stop + power off" : " (not running)"));
                 CancelRetry();
                 if (_running)
@@ -194,6 +200,7 @@ namespace GoveeDreamView
             }
             else if (e.Reason == SessionSwitchReason.SessionUnlock)
             {
+                _locked = false;
                 Log.Write("SessionUnlock" + (_pausedByLock ? " -> power on + resume" : " (nothing to resume)"));
                 if (_pausedByLock)
                 {
@@ -221,9 +228,9 @@ namespace GoveeDreamView
                 return;
             }
             if (e.Mode != PowerModes.Resume) return;
-            if (!_running && _pausedByLock)
+            if (!_running && (_pausedByLock || _pausedByDisplay))
             {
-                Log.Write("Resume while locked -> rediscover on unlock");
+                Log.Write("Resume while paused -> rediscover on unlock/display-on");
                 _cfg.DeviceIp = "";
                 _cfg.Save();
                 return;
@@ -236,6 +243,28 @@ namespace GoveeDreamView
             _cfg.DeviceIp = "";
             _cfg.Save();
             StartWithRetry();
+        }
+
+        // Display off (idle timeout) -> stop + power off, like lock. Display on -> resume, unless the
+        // session is locked: then the pause passes to the lock, and unlock resumes.
+        private void OnDisplayChanged(bool on)
+        {
+            if (!on)
+            {
+                if (!_running) return;
+                Log.Write("Display off -> stop + power off");
+                CancelRetry();
+                _pausedByDisplay = true;
+                Stop();
+                PowerOff();
+                return;
+            }
+            if (!_pausedByDisplay) return;
+            _pausedByDisplay = false;
+            if (_locked) { _pausedByLock = true; Log.Write("Display on while locked -> resume on unlock"); return; }
+            Log.Write("Display on -> resume");
+            Start(auto: true, quiet: true);
+            if (!_running) StartWithRetry();
         }
 
         // After wake, Wi-Fi can take a while: the LAN scan then fails with "host unreachable".
@@ -618,6 +647,7 @@ namespace GoveeDreamView
                     for (int i = 0; i < 20 && _running; i++)
                     {
                         Thread.Sleep(1500);   // the strip reports "on" a moment after turn:1
+                        if (!_running) break;   // Stop() during the wait: no client, strip must stay off
                         if (_client.IsOn() == true) break;
                         Log.Write("Strip not on -> power on again");
                         _client.Activate(_cfg.Brightness);
@@ -758,6 +788,7 @@ namespace GoveeDreamView
         {
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            _display.Dispose();
             CancelRetry();
             Stop();
             _animTimer.Dispose();
