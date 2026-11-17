@@ -251,7 +251,7 @@ namespace GoveeDreamView
         {
             if (!on)
             {
-                if (!_running) return;
+                if (!_running || !_cfg.PauseOnDisplayOff) return;
                 Log.Write("Display off -> stop + power off");
                 CancelRetry();
                 _pausedByDisplay = true;
@@ -313,39 +313,25 @@ namespace GoveeDreamView
                 new[] { 1.0, 1.25, 1.5, 1.75 }, v => v.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), _cfg.Saturation,
                 v => { _cfg.Saturation = v; SaveCfg(); _tuningDirty = true; }));
 
-            var streamAnyway = new ToolStripMenuItem("Stream even if Govee Desktop runs")
+            settings.DropDownItems.Add(Tickbox("Stream even if Govee Desktop runs", _cfg.StreamEvenIfGoveeDesktop, on =>
             {
-                Checked = _cfg.StreamEvenIfGoveeDesktop,
-                CheckOnClick = true,
-            };
-            streamAnyway.CheckedChanged += (s, e) =>
-            {
-                _cfg.StreamEvenIfGoveeDesktop = streamAnyway.Checked;
+                _cfg.StreamEvenIfGoveeDesktop = on;
                 SaveCfg();
-                if (_cfg.StreamEvenIfGoveeDesktop && !_running) Start(); // opted in -> start now
-            };
-            settings.DropDownItems.Add(streamAnyway);
-
-            var killDesktop = new ToolStripMenuItem("Kill Govee Desktop on start")
-            {
-                Checked = _cfg.KillGoveeDesktop,
-                CheckOnClick = true,
-            };
-            killDesktop.CheckedChanged += (s, e) =>
-            {
-                _cfg.KillGoveeDesktop = killDesktop.Checked;
-                SaveCfg();
-            };
-            settings.DropDownItems.Add(killDesktop);
-
-            var autoStart = new ToolStripMenuItem("Start with Windows")
-            {
-                Checked = AutoStartEnabled(),
-                CheckOnClick = true,
-            };
-            autoStart.CheckedChanged += (s, e) => SetAutoStart(autoStart.Checked);
-            settings.DropDownItems.Add(autoStart);
+                if (on && !_running) Start(); // opted in -> start now
+            }));
+            settings.DropDownItems.Add(Tickbox("Kill Govee Desktop on start", _cfg.KillGoveeDesktop,
+                on => { _cfg.KillGoveeDesktop = on; SaveCfg(); }));
+            settings.DropDownItems.Add(Tickbox("Turn off with display", _cfg.PauseOnDisplayOff,
+                on => { _cfg.PauseOnDisplayOff = on; SaveCfg(); }));
+            settings.DropDownItems.Add(Tickbox("Start with Windows", AutoStartEnabled(), SetAutoStart));
             return settings;
+        }
+
+        private static ToolStripMenuItem Tickbox(string text, bool value, Action<bool> set)
+        {
+            var item = new ToolStripMenuItem(text) { Checked = value, CheckOnClick = true };
+            item.CheckedChanged += (s, e) => set(item.Checked);
+            return item;
         }
 
         // Radio-style preset list: the value matching current is ticked; picking one unticks the siblings.

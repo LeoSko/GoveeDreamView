@@ -64,7 +64,7 @@ your device, settings). Without it nothing on your network can reach it.
 - **Start / Stop**, or double-click the icon.
 - **Settings** tunes brightness, gamma and saturation live. Once brightness is maxed,
   gamma is the knob that actually changes how bright it looks: higher means deeper blacks
-  but dimmer mid-tones. It also holds **Start with Windows** and the two Govee Desktop
+  but dimmer mid-tones. It also holds **Start with Windows**, **Turn off with display** and the two Govee Desktop
   switches below.
 - **Kill Govee Desktop** clears the way when Govee's own app has the strip. Both stream
   the same protocol, so together they make it blink; by default this app steps aside and
@@ -75,8 +75,8 @@ your device, settings). Without it nothing on your network can reach it.
 
 Lock Windows, let the display turn off, or put the PC to sleep, and the strip goes off.
 Unlock, wake the display or the PC, and it comes back (after sleep it rediscovers the strip
-by itself). Everything gets saved to a
-`config.ini` next to the exe, each key commented.
+by itself). Untick Settings → **Turn off with display** to keep it lit while the display
+is off. Everything gets saved to a `config.ini` next to the exe, each key commented.
 
 ## Files
 

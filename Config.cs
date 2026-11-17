@@ -20,6 +20,7 @@ namespace GoveeDreamView
         public int MonitorIndex = 0;        // which display to capture (0 = primary)
         public bool StreamEvenIfGoveeDesktop = false;  // false = don't auto-stream while Govee's own desktop app runs (they fight over the strip); true = stream anyway
         public bool KillGoveeDesktop = false;          // true = kill GoveeDesktop.exe on every start instead of stepping aside
+        public bool PauseOnDisplayOff = true;          // true = power the strip off while Windows has the display off
 
         // --- colour correction (filled in by tray -> Calibrate colours) ---
         public double[] Ccm = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };   // 3x3 row-major, applied after gamma
@@ -58,6 +59,7 @@ namespace GoveeDreamView
             c.MonitorIndex = Math.Max(0, GetInt(map, "MonitorIndex", c.MonitorIndex));
             c.StreamEvenIfGoveeDesktop = GetBool(map, "StreamEvenIfGoveeDesktop", c.StreamEvenIfGoveeDesktop);
             c.KillGoveeDesktop = GetBool(map, "KillGoveeDesktop", c.KillGoveeDesktop);
+            c.PauseOnDisplayOff = GetBool(map, "PauseOnDisplayOff", c.PauseOnDisplayOff);
             c.Ccm = GetDoubles(map, "Ccm", c.Ccm, 9);
             c.CalibPort = Clamp(GetInt(map, "CalibPort", c.CalibPort), 1024, 65535);
             return c;
@@ -86,6 +88,8 @@ namespace GoveeDreamView
                 "StreamEvenIfGoveeDesktop=" + (StreamEvenIfGoveeDesktop ? "true" : "false") + "\n" +
                 "# KillGoveeDesktop: true kills GoveeDesktop.exe on every start instead of stepping aside.\n" +
                 "KillGoveeDesktop=" + (KillGoveeDesktop ? "true" : "false") + "\n" +
+                "# PauseOnDisplayOff: true powers the strip off while Windows has the display off, on again after.\n" +
+                "PauseOnDisplayOff=" + (PauseOnDisplayOff ? "true" : "false") + "\n" +
                 "# Ccm: 3x3 colour-correction matrix (row-major), set by tray -> Calibrate colours.\n" +
                 "Ccm=" + Join(Ccm) + "\n" +
                 "# CalibPort: HTTPS port for the phone calibration page.\n" +
