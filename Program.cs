@@ -125,6 +125,7 @@ namespace GoveeDreamView
         private Thread _worker;
         private volatile bool _running;
         private bool _pausedByLock;    // true when a session lock stopped streaming, so unlock can resume
+        private bool _pausedBySleep;   // true when sleep stopped streaming, so wake can resume
         private System.Windows.Forms.Timer _retryTimer;   // StartWithRetry() attempts after wake/unlock
         private string _lastIp;        // last resolved device IP, so we can power it off after Stop() disposes the client
         private volatile bool _tuningDirty;   // set by the Settings menu so the loop rebuilds gamma/saturation live
@@ -203,11 +204,22 @@ namespace GoveeDreamView
             }
         }
 
-        // Wake from sleep -> rediscover + restart, like the tray item. After wake the strip can sit on
-        // its own scene and ignore our frames until re-armed. Retries wait for Wi-Fi to reconnect.
-        // A PC usually locks before it sleeps: then the lock stopped us, and unlock re-locates the strip.
+        // Sleep -> stop + power the strip off. Wake -> rediscover + restart, like the tray item. After
+        // wake the strip can sit on its own scene and ignore our frames until re-armed. Retries wait
+        // for Wi-Fi to reconnect. A PC usually locks before it sleeps: then the lock stopped us, and
+        // unlock re-locates the strip.
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
+            if (e.Mode == PowerModes.Suspend)
+            {
+                Log.Write("Suspend" + (_running ? " -> stop + power off" : " (not running)"));
+                CancelRetry();
+                if (!_running) return;
+                _pausedBySleep = true;
+                Stop();
+                PowerOff();
+                return;
+            }
             if (e.Mode != PowerModes.Resume) return;
             if (!_running && _pausedByLock)
             {
@@ -216,8 +228,10 @@ namespace GoveeDreamView
                 _cfg.Save();
                 return;
             }
-            Log.Write("Resume" + (_running ? " -> rediscover, retry every 5 s" : " (not running)"));
-            if (!_running) return;
+            bool resume = _running || _pausedBySleep;
+            _pausedBySleep = false;
+            Log.Write("Resume" + (resume ? " -> rediscover, retry every 5 s" : " (not running)"));
+            if (!resume) return;
             Stop();
             _cfg.DeviceIp = "";
             _cfg.Save();
