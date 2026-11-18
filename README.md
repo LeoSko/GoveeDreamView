@@ -71,6 +71,8 @@ your device, settings). Without it nothing on your network can reach it.
   skips auto-start while GoveeDesktop.exe runs.
 - **Calibrate colours** points your phone camera at the wall behind the strip and solves
   a colour matrix so the reflected light matches the screen. Never leaves your LAN.
+- **Allow in Windows Firewall** (Settings) fixes a blocked firewall in one click: the strip's
+  answers come back on UDP 4002, and a cancelled first-run firewall prompt blocks them.
 - Plus Reload/Edit config and Rediscover device.
 
 Lock Windows, let the display turn off, or put the PC to sleep, and the strip goes off.

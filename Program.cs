@@ -328,6 +328,7 @@ namespace GoveeDreamView
             settings.DropDownItems.Add(Tickbox("Turn off with display", _cfg.PauseOnDisplayOff,
                 on => { _cfg.PauseOnDisplayOff = on; SaveCfg(); }));
             settings.DropDownItems.Add(Tickbox("Start with Windows", AutoStartEnabled(), SetAutoStart));
+            settings.DropDownItems.Add("Allow in Windows Firewall", null, (s, e) => AllowFirewall());
             return settings;
         }
 
@@ -640,7 +641,11 @@ namespace GoveeDreamView
                         if (!_running) break;   // Stop() during the wait: no client, strip must stay off
                         var on = _client.IsOn();
                         if (on == true) break;
-                        if (on == null) { Log.Write("Strip gives no status reply -> skip power check"); break; }
+                        if (on == null)
+                        {
+                            Notify("Strip answers are blocked. Tray -> Settings -> Allow in Windows Firewall.", ToolTipIcon.Warning);
+                            break;
+                        }
                         Log.Write("Strip not on -> power on again");
                         _client.Activate(_cfg.Brightness);
                     }
@@ -764,6 +769,27 @@ namespace GoveeDreamView
             }
             if (_tray.ContextMenuStrip.InvokeRequired) _tray.ContextMenuStrip.BeginInvoke((Action)Apply);
             else Apply();
+        }
+
+        // The strip answers status and scan on UDP 4002 as new packets, so Windows Firewall drops
+        // them unless the exe has an inbound rule. A cancelled first-run firewall prompt leaves Block
+        // rules, which win over Allow, so delete every rule for this exe first. The Allow covers all
+        // inbound: the phone calibration page needs its HTTPS port too. One UAC prompt.
+        private void AllowFirewall()
+        {
+            const string netsh = "netsh advfirewall firewall ";
+            var prog = " program=\"" + Application.ExecutablePath + "\"";
+            var args = "/c " + netsh + "delete rule name=all" + prog + " & " + netsh +
+                "add rule name=GoveeDreamView dir=in action=allow profile=any" + prog;
+            try
+            {
+                var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", args)
+                    { Verb = "runas", UseShellExecute = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden });
+                p.WaitForExit();
+                Notify(p.ExitCode == 0 ? "Firewall rule added." : "Firewall rule failed, exit " + p.ExitCode,
+                       p.ExitCode == 0 ? ToolTipIcon.Warning : ToolTipIcon.Error);
+            }
+            catch (System.ComponentModel.Win32Exception) { Log.Write("Firewall: admin prompt cancelled"); }
         }
 
         private void Notify(string msg, ToolTipIcon icon)
