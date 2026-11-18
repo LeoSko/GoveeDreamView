@@ -221,7 +221,11 @@ namespace GoveeDreamView
             {
                 Log.Write("Suspend" + (_running ? " -> stop + power off" : " (not running)"));
                 CancelRetry();
-                if (!_running) return;
+                if (!_running)
+                {
+                    if (_pausedByDisplay || _pausedByLock) PowerOff();   // second chance: the earlier power-off may be lost
+                    return;
+                }
                 _pausedBySleep = true;
                 Stop();
                 PowerOff();
@@ -634,7 +638,9 @@ namespace GoveeDreamView
                     {
                         Thread.Sleep(1500);   // the strip reports "on" a moment after turn:1
                         if (!_running) break;   // Stop() during the wait: no client, strip must stay off
-                        if (_client.IsOn() == true) break;
+                        var on = _client.IsOn();
+                        if (on == true) break;
+                        if (on == null) { Log.Write("Strip gives no status reply -> skip power check"); break; }
                         Log.Write("Strip not on -> power on again");
                         _client.Activate(_cfg.Brightness);
                     }
