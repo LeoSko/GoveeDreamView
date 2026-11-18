@@ -99,7 +99,8 @@ namespace GoveeDreamView
         }
 
         // Leaving stream mode takes the strip about 100 ms: it drops a command sent sooner (power-off
-        // lost 29/30 with no wait, 2/30 after 40 ms, 0/30 after 100 ms). Wait before the next command.
+        // lost 29/30 with no wait). The wait only helps a strip whose answers are blocked: PowerOff()
+        // confirms with devStatus when it can.
         public void Deactivate()
         {
             try { SendJson("{\"msg\":{\"cmd\":\"razer\",\"data\":{\"pt\":\"uwABsQAL\"}}}"); } // BB 00 01 B1 00 0B

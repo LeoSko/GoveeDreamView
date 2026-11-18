@@ -291,10 +291,22 @@ namespace GoveeDreamView
         }
 
         // Powers the strip off via a one-off client (Stop() has already disposed the streaming client).
+        // Power-off has no ack, so ask the strip and send again while it still reports on (about 3 s
+        // at most). A strip whose answers do not arrive (firewall) gets the one command.
         private void PowerOff()
         {
             if (string.IsNullOrEmpty(_lastIp)) return;
-            try { using (var c = new GoveeClient(_lastIp, _cfg.StretchToFit)) c.Power(false); }
+            try
+            {
+                using (var c = new GoveeClient(_lastIp, _cfg.StretchToFit))
+                    for (int i = 0; i < 6; i++)
+                    {
+                        c.Power(false);
+                        Thread.Sleep(200);   // the strip reports the new state a moment after the command
+                        if (c.IsOn(300) != true) break;
+                        Log.Write("Strip still on -> power off again");
+                    }
+            }
             catch (Exception ex) { Log.Write("PowerOff: " + ex.Message); }
         }
 
