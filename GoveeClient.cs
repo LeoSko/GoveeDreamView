@@ -77,16 +77,8 @@ namespace GoveeDreamView
 
         // Powers the whole device on/off (not the same as stream mode: Deactivate only exits DreamView,
         // which leaves the strip lit on its last scene). Used to actually darken the strip on lock.
-        // UDP with no ack: one packet gets lost on wake (NIC settling) or right after leaving stream
-        // mode, so send it a few times.
-        public void Power(bool on)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                SendJson("{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":" + (on ? 1 : 0) + "}}}");
-                System.Threading.Thread.Sleep(80);
-            }
-        }
+        public void Power(bool on) =>
+            SendJson("{\"msg\":{\"cmd\":\"turn\",\"data\":{\"value\":" + (on ? 1 : 0) + "}}}");
 
         // Asks the device whether it is powered on. The reply goes to :4002, not to the sender port.
         // Returns null when no reply arrives in time.
@@ -106,10 +98,13 @@ namespace GoveeDreamView
             catch (SocketException) { return null; }
         }
 
+        // Leaving stream mode takes the strip about 100 ms: it drops a command sent sooner (power-off
+        // lost 29/30 with no wait, 2/30 after 40 ms, 0/30 after 100 ms). Wait before the next command.
         public void Deactivate()
         {
             try { SendJson("{\"msg\":{\"cmd\":\"razer\",\"data\":{\"pt\":\"uwABsQAL\"}}}"); } // BB 00 01 B1 00 0B
             catch { /* best effort on shutdown */ }
+            System.Threading.Thread.Sleep(150);
         }
 
         // rgb = N*3 bytes (R,G,B per zone). Builds the razer colour packet, base64s it, wraps in JSON.

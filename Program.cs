@@ -221,11 +221,7 @@ namespace GoveeDreamView
             {
                 Log.Write("Suspend" + (_running ? " -> stop + power off" : " (not running)"));
                 CancelRetry();
-                if (!_running)
-                {
-                    if (_pausedByDisplay || _pausedByLock) PowerOff();   // second chance: the earlier power-off may be lost
-                    return;
-                }
+                if (!_running) return;
                 _pausedBySleep = true;
                 Stop();
                 PowerOff();
